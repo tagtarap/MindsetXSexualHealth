@@ -1,0 +1,270 @@
+---
+title: "OpenScript_MindsetSexualHealth"
+author: "Tris"
+date: "2023-12-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#This is a script for reserchers to refer to script and code used for the manuscript"Mindset X Sexual Health: Does mindset impact receptivity to sexuality education curricula?"
+```
+
+```{r}
+setwd() #set your wd here
+
+HEARTPre <- read.csv("XXXHEARTPre_Scales.csv") #insert HEARTpre data here
+
+HEARTIntervention <- read.csv("XXXHEARTInter_Scales.csv") #insert HEART intervention data here
+
+HEARTPost <- read.csv("XXXHEARTPost_Scales.csv") #insert HEART post data here
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lme4)
+library(lmerTest)
+
+names(HEARTPre)
+```
+
+
+#Matching 3 group: Pre, Inter, Post
+```{r}
+PreData_Selected <- HEARTPre %>%
+  select(ID, Age, gender, sexori, Ethnicity, religion, urbanity, SexEd, Degree, TightLoose_1, TightLoose_2, TightLoose_3, TightLoose_4, TightLoose_5, TightLoose_5R, TightLoose_6, MindsetScale, Extraversion, Agreeableness, Conscientiousness, NegativeEmotionality, OpenMindedness, STI_ShamePre, STI_StigmaPre, SSE_ScalePre, Comfort_ScalePre, Guilt_ScalePre)
+
+
+InterData_Selected <- HEARTIntervention %>%
+  select(ID, STI_ShameInter, STI_StigmaInter, SSE_ScaleInter, Comfort_ScaleInter, Guilt_ScaleInter)
+
+PostData_Selected <- HEARTPost %>%
+  select(ID, STI_ShamePost, STI_StigmaPost, SSE_ScalePost, Comfort_ScalePost, Guilt_ScalePost)
+
+#Combine data frames based on ID - this gives teh data frame you will work with for testing the models
+
+Matched3Groups <- PreData_Selected %>%
+  left_join(InterData_Selected, by = "ID") %>%
+  left_join(PostData_Selected, by = "ID")
+
+```
+
+
+```{r}
+##Splitting Mindset into two groups for visuals:
+
+mean_value <- mean(Matched3Groups$MindsetScale)
+range(Matched3Groups$MindsetScale)
+
+Tighter <- Matched3Groups$MindsetScale[Matched3Groups$MindsetScale > mean_value]
+Looser <- Matched3Groups$MindsetScale[Matched3Groups$MindsetScale <= mean_value]
+
+mean(Tighter)
+mean(Looser)
+
+Matched3Groups$MindsetGroup <- ifelse(Matched3Groups$MindsetScale >= mean_value, "Tighter", "Looser")
+table(Matched3Groups$MindsetGroup)
+
+```
+
+#Demographics
+```{r}
+mean(Matched3Groups$Age, na.rm = TRUE)
+min(Matched3Groups$Age, na.rm = TRUE)
+max(Matched3Groups$Age, na.rm = TRUE)
+sd(Matched3Groups$Age, na.rm = TRUE)
+min(Matched3Groups$MindsetScale, na.rm = TRUE)
+max(Matched3Groups$MindsetScale, na.rm = TRUE)
+mean(Matched3Groups$MindsetScale, na.rm = TRUE)
+sd(Matched3Groups$MindsetScale, na.rm = TRUE)
+
+table(Matched3Groups$gender)
+table(Matched3Groups$sexori)
+table(Matched3Groups$Degree)
+table(Matched3Groups$religion)
+table(Matched3Groups$SexEd)
+```
+
+#MLM for STI-shame
+```{r}
+#Running MLM
+#STI-Related Shame:
+##With all three conditions
+STIShameAll <- Matched3Groups[, c("ID", "MindsetScale", "STI_ShamePre", "STI_ShameInter", "STI_ShamePost")]
+
+STIShame_longAll <- STIShameAll %>%
+  pivot_longer(cols = STI_ShamePre:STI_ShamePost,
+               names_to = "Time",
+               values_to = "Shame_Scores")
+
+STIShame_longAll$Time <- as.factor(STIShame_longAll$Time)
+STIShame_longAll$Time <- relevel(STIShame_longAll$Time, ref = "STI_ShamePre")
+
+
+Shameonlyall <- lmer(Shame_Scores ~ Time + (1 | ID), data = STIShame_longAll)
+summary(Shameonlyall)
+
+####Results: Long term condition effects: for time significant over post (p<.001) and inter (p<.001)
+
+
+
+STIShameModelAll <- lmer(Shame_Scores ~ MindsetScale * Time + (1 | ID), data = STIShame_longAll)
+summary(STIShameModelAll)
+
+
+
+```
+
+#MLM for STI-stigma
+```{r}
+##With all three conditions
+STIStigmaAll <- Matched3Groups[, c("ID", "MindsetScale", "STI_StigmaPre", "STI_StigmaInter", "STI_StigmaPost")]
+
+STIStigma_longall <- STIStigmaAll %>%
+  pivot_longer(cols = STI_StigmaPre:STI_StigmaPost,
+               names_to = "Time",
+               values_to = "Stigma_Scores")
+
+STIStigma_longall$Time <- as.factor(STIStigma_longall$Time)
+STIStigma_longall$Time <- relevel(STIStigma_longall$Time, ref = "STI_StigmaPre")
+
+Stigmaonlyall <- lmer(Stigma_Scores ~ Time + (1 | ID), data = STIStigma_longall)
+summary(Stigmaonlyall)
+
+###Results: Inter marginally significant (p = .06); Post marginally significant (P=.08)
+
+
+#MLM for all three conditions with Time * Mindset
+STIStigmaModelAll <- lmer(Stigma_Scores ~ MindsetScale * Time + (1 | ID), data = STIStigma_longall)
+summary(STIShameModelAll)
+
+
+```
+
+#MLM for SSE
+```{r}
+names(Matched3Groups)
+SSEall <- Matched3Groups[, c("ID", "MindsetScale", "MindsetGroup", "SSE_ScalePre", "SSE_ScaleInter", "SSE_ScalePost")]
+
+SSE_longall <- SSEall %>%
+  pivot_longer(cols = SSE_ScalePre:SSE_ScalePost,
+               names_to = "Time",
+               values_to = "SSE_Scores")
+
+SSE_longall$Time <- as.factor(SSE_longall$Time)
+SSE_longall$Time <- relevel(SSE_longall$Time, ref = "SSE_ScalePre")
+
+SSEonlyall <- lmer(SSE_Scores ~ Time + (1 | ID), data = SSE_longall)
+summary(SSEonlyall)
+
+# Load the ggridges package
+library(ggridges)
+library(ggdist)
+
+##use me
+
+SSEGrouped <- ggplot(SSE_longall, aes(x = Time, y = SSE_Scores, fill = MindsetGroup)) +
+  geom_violin(position = position_nudge(x = .1), adjust = 1.5, trim = FALSE, alpha = .5, color = "#ABB2B9", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  geom_point(aes(x = as.numeric(Time) - 0.15, y = SSE_Scores, color = MindsetGroup), position = position_jitter(width = 0.05), size = 1, shape = 20) +
+  geom_boxplot(aes(x = Time, y = SSE_Scores, fill = MindsetGroup), outlier.shape = NA, alpha = 0.5, width = 0.1, color = "#2C3E50") +
+scale_color_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for lines and points
+  scale_fill_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for fill
+  ggtitle("Sexual Self-Efficacy across Time grouped by Mindset") +
+    labs(x = "Time", y = "Sexual Self-Efficacy") +
+  scale_x_discrete(labels = c("SSE_ScalePre" = "Time 1", "SSE_ScaleInter" = "Time 2", "SSE_ScalePost" = "Time 3")) +
+  theme_classic()
+
+pdf("SSEGroupedTimePlot", width = 8, height = 6)
+print(SSEGrouped)
+dev.off()
+
+png(filename = "SSEXMindset.png", width = 1050, height = 1050, res = 300, pointsize = 20)
+print(SSEGrouped)
+dev.off()
+```
+
+#MLM for comfort w/ sexuality
+```{r}
+names(Matched3Groups)
+SexComfortall <- Matched3Groups[, c("ID", "MindsetScale", "MindsetGroup", "Comfort_ScalePre", "Comfort_ScaleInter", "Comfort_ScalePost")]
+
+SexComfort_longall <- SexComfortall %>%
+  pivot_longer(cols = Comfort_ScalePre:Comfort_ScalePost,
+               names_to = "Time",
+               values_to = "Comfort_Scores")
+
+SexComfort_longall$Time <- as.factor(SexComfort_longall$Time)
+SexComfort_longall$Time <- relevel(SexComfort_longall$Time, ref = "Comfort_ScalePre")
+
+SexComfortonlyall <- lmer(Comfort_Scores ~ Time + (1 | ID), data = SexComfort_longall)
+summary(SexComfortonlyall)
+
+###Results: Significant main effects for Time: higher comfort scores at intervention (p<.001) AND post (p<.001)
+
+
+#MLM 3 groups with Time * Mindset
+
+SexComfortModelall <- lmer(Comfort_Scores ~ MindsetScale * Time + (1 | ID), data = SexComfort_longall)
+summary(SexComfortModelall)
+
+####Raindrop plot split by mindsetgroup:
+
+ComfortGrouped <- ggplot(SexComfort_longall, aes(x = Time, y = Comfort_Scores, fill = MindsetGroup)) +
+  geom_violin(position = position_nudge(x = .1), adjust = 1.5, trim = FALSE, alpha = .5, color = "#ABB2B9", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  geom_point(aes(x = as.numeric(Time) - 0.15, y = Comfort_Scores, color = MindsetGroup), position = position_jitter(width = 0.05), size = 1, shape = 20) +
+  geom_boxplot(aes(x = Time, y = Comfort_Scores, fill = MindsetGroup), outlier.shape = NA, alpha = 0.5, width = 0.1, color = "#2C3E50") +
+scale_color_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for lines and points
+  scale_fill_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for fill
+  ggtitle("Comfort with Sexuality across Time grouped by Mindset") +
+    labs(x = "Time", y = "Comfort with Sexuality") +
+  scale_x_discrete(labels = c("Comfort_ScalePre" = "Time 1", "Comfort_ScaleInter" = "Time 2", "Comfort_ScalePost" = "Time 3")) +
+  theme_classic()
+
+pdf("ComfortGroupedTimePlot", width = 8, height = 6)
+print(ComfortGrouped)
+dev.off()
+
+```
+
+#MLM Sex Guilt
+```{r}
+names(Matched3Groups)
+SexGuiltAll <- Matched3Groups[, c("ID", "MindsetScale", "MindsetGroup", "Guilt_ScalePre", "Guilt_ScaleInter", "Guilt_ScalePost")]
+
+SexGuilt_longall <- SexGuiltAll %>%
+  pivot_longer(cols = Guilt_ScalePre:Guilt_ScalePost,
+               names_to = "Time",
+               values_to = "Guilt_Scores")
+
+SexGuilt_longall$Time <- as.factor(SexGuilt_longall$Time)
+SexGuilt_longall$Time <- relevel(SexGuilt_longall$Time, ref = "Guilt_ScalePre")
+
+SexGuiltonlyall <- lmer(Guilt_Scores ~ Time + (1 | ID), data = SexGuilt_longall)
+summary(SexGuiltonlyall)
+
+###Resutls: No main effect of Time
+
+SexGuiltModelall <- lmer(Guilt_Scores ~ MindsetScale * Time + (1 | ID), data = SexGuilt_longall)
+summary(SexGuiltModelall)
+
+###raindrop:
+GuiltGrouped <- ggplot(SexGuilt_longall, aes(x = Time, y = Guilt_Scores, fill = MindsetGroup)) +
+  geom_violin(position = position_nudge(x = .1), adjust = 1.5, trim = FALSE, alpha = .5, color = "#ABB2B9", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  geom_point(aes(x = as.numeric(Time) - 0.15, y = Guilt_Scores, color = MindsetGroup), position = position_jitter(width = 0.05), size = 1, shape = 20) +
+  geom_boxplot(aes(x = Time, y = Guilt_Scores, fill = MindsetGroup), outlier.shape = NA, alpha = 0.5, width = 0.1, color = "#2C3E50") +
+scale_color_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for lines and points
+  scale_fill_manual(values = c("Tighter" = "#FF69B4", "Looser" = "#008080")) +  # Set custom colors for fill
+  ggtitle("Sex-Related Guilt across Time grouped by Mindset") +
+    labs(x = "Time", y = "Sex Guilt") +
+  scale_x_discrete(labels = c("Guilt_ScalePre" = "Time 1", "Guilt_ScaleInter" = "Time 2", "Guilt_ScalePost" = "Time 3")) + 
+  theme_classic()
+
+
+pdf("GuiltGrouped1Plot", width = 8, height = 6)
+print(GuiltGrouped)
+dev.off()
+```
+
